@@ -22,7 +22,7 @@ Aplikasi ini tidak menggunakan *cloud database*. Anda harus membangun basis data
 
 ```sql
 CREATE USER prokura WITH PASSWORD 'prokura';
-CREATE DATABASE "prokuraDB" OWNER prokura;
+CREATE DATABASE "prokuradb" OWNER prokura;
 ```
 
 **3.** Keluar dari terminal SQL, lalu impor skema dan data *mockup* melalui terminal OS Anda (arahkan terminal ke folder tempat file `.sql` berada):
