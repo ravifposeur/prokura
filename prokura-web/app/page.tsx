@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:5000";
+
 export default function ProkuraUnifiedDashboard() {
   // --- STATE MANAJEMEN ---
   const [activeRole, setActiveRole] = useState<
@@ -32,11 +35,11 @@ export default function ProkuraUnifiedDashboard() {
     setLoading(true);
     try {
       const [prodRes, credRes, histRes] = await Promise.all([
-        fetch("http://127.0.0.1:5000/api/products").then((r) => r.json()),
-        fetch(`http://127.0.0.1:5000/api/companies/${COMPANY_ID}/credit`).then(
+        fetch(`${API_BASE_URL}/api/products`).then((r) => r.json()),
+        fetch(`${API_BASE_URL}/api/companies/${COMPANY_ID}/credit`).then(
           (r) => r.json(),
         ),
-        fetch(`http://127.0.0.1:5000/api/companies/${COMPANY_ID}/orders`).then(
+        fetch(`${API_BASE_URL}/api/companies/${COMPANY_ID}/orders`).then(
           (r) => r.json(),
         ),
       ]);
@@ -103,7 +106,7 @@ export default function ProkuraUnifiedDashboard() {
     };
 
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/orders", {
+      const res = await fetch(`${API_BASE_URL}/api/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -126,7 +129,7 @@ export default function ProkuraUnifiedDashboard() {
     setSelectedPO(po);
     setPoDetails([]); // loading state
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/orders/${po.po_id}`);
+      const res = await fetch(`${API_BASE_URL}/api/orders/${po.po_id}`);
       const data = await res.json();
       if (data.success) setPoDetails(data.data);
     } catch (error) {
@@ -145,7 +148,7 @@ export default function ProkuraUnifiedDashboard() {
     setIsProcessing(true);
     try {
       const res = await fetch(
-        `http://127.0.0.1:5000/api/orders/${poId}/status`,
+        `${API_BASE_URL}/api/orders/${poId}/status`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

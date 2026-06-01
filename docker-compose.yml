@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: prokura-postgres
+    environment:
+      POSTGRES_USER: prokura
+      POSTGRES_PASSWORD: prokura
+      POSTGRES_DB: prokuradb
+    ports:
+      - "5439:5432"
+    volumes:
+      - prokura_postgres_data:/var/lib/postgresql/data
+      - ./prokura-api/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prokura -d prokuradb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  prokura_postgres_data:
