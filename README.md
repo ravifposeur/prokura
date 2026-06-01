@@ -68,6 +68,12 @@ curl http://127.0.0.1:5000/api/admin/summary
 curl http://127.0.0.1:5000/api/products
 ```
 
+Smoke test semua fitur final project:
+
+```powershell
+.\scripts\final_project_smoke.ps1
+```
+
 Expected summary seed awal:
 
 ```json

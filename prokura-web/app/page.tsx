@@ -14,6 +14,9 @@ export default function ProkuraUnifiedDashboard() {
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [companyData, setCompanyData] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Semua");
+  const [availableOnly, setAvailableOnly] = useState(true);
 
   // State Finance (Approval & History)
   const [poHistory, setPoHistory] = useState<any[]>([]);
@@ -25,6 +28,23 @@ export default function ProkuraUnifiedDashboard() {
 
   const COMPANY_ID = 1;
   const USER_ID = 1;
+
+  const categories = [
+    "Semua",
+    ...Array.from(new Set(products.map((p) => p.kategori).filter(Boolean))),
+  ].sort((a, b) => (a === "Semua" ? -1 : b === "Semua" ? 1 : a.localeCompare(b)));
+
+  const filteredProducts = products.filter((product) => {
+    const needle = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      needle.length === 0 ||
+      product.nama_produk?.toLowerCase().includes(needle) ||
+      product.sku?.toLowerCase().includes(needle);
+    const matchesCategory =
+      selectedCategory === "Semua" || product.kategori === selectedCategory;
+    const matchesStock = !availableOnly || Number(product.stok_gudang) > 0;
+    return matchesSearch && matchesCategory && matchesStock;
+  });
 
   // --- FETCH DATA AWAL ---
   useEffect(() => {
@@ -236,8 +256,41 @@ export default function ProkuraUnifiedDashboard() {
         <div className="max-w-[1600px] mx-auto flex gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* PANEL KIRI: Katalog */}
           <div className="flex-1">
+            <div className="bg-white border border-slate-100 rounded-3xl p-5 mb-6 shadow-sm">
+              <div className="grid grid-cols-[1fr_220px_180px] gap-4 items-center">
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Cari produk atau SKU..."
+                  className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none focus:border-blue-400 focus:bg-white"
+                />
+                <select
+                  value={selectedCategory}
+                  onChange={(event) => setSelectedCategory(event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-600 outline-none focus:border-blue-400 focus:bg-white"
+                >
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={availableOnly}
+                    onChange={(event) => setAvailableOnly(event.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Stok tersedia
+                </label>
+              </div>
+              <p className="mt-3 text-xs font-bold uppercase tracking-widest text-slate-400">
+                Menampilkan {filteredProducts.length} dari {products.length} produk
+              </p>
+            </div>
             <div className="grid grid-cols-3 gap-6">
-              {products.map((p) => (
+              {filteredProducts.map((p) => (
                 <div
                   key={p.product_id}
                   className="bg-white rounded-3xl p-5 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 group flex flex-col justify-between"
@@ -301,6 +354,11 @@ export default function ProkuraUnifiedDashboard() {
                   </div>
                 </div>
               ))}
+              {filteredProducts.length === 0 && (
+                <div className="col-span-3 rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm font-bold text-slate-400">
+                  Tidak ada produk yang cocok dengan pencarian.
+                </div>
+              )}
             </div>
           </div>
 

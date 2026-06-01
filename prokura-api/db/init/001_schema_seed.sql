@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS orderdetails;
 DROP TABLE IF EXISTS purchaseorders;
+DROP TABLE IF EXISTS inventory_movements;
 DROP TABLE IF EXISTS productimages;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS users;
@@ -37,6 +38,17 @@ CREATE TABLE productimages (
     product_id INT REFERENCES products(product_id) ON DELETE CASCADE,
     image_url VARCHAR(255) NOT NULL,
     is_primary BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE inventory_movements (
+    movement_id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(product_id),
+    movement_type VARCHAR(30) NOT NULL,
+    quantity INT NOT NULL,
+    note TEXT,
+    reference_type VARCHAR(30),
+    reference_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE purchaseorders (
@@ -81,6 +93,13 @@ INSERT INTO productimages (product_id, image_url, is_primary) VALUES
 (6, '/images/products/SKU-IDT-5014_1.jpg', true),
 (13, '/images/products/SKU-MSF-9427_1.jpg', true),
 (16, '/images/products/SKU-FXN-7383_1.jpg', true);
+
+INSERT INTO inventory_movements (product_id, movement_type, quantity, note, reference_type, reference_id) VALUES
+(1, 'INITIAL_STOCK', 120, 'Stok awal seed database', 'PRODUCT', 1),
+(5, 'INITIAL_STOCK', 1000, 'Stok awal seed database', 'PRODUCT', 5),
+(6, 'INITIAL_STOCK', 1000, 'Stok awal seed database', 'PRODUCT', 6),
+(13, 'INITIAL_STOCK', 1000, 'Stok awal seed database', 'PRODUCT', 13),
+(16, 'INITIAL_STOCK', 1000, 'Stok awal seed database', 'PRODUCT', 16);
 
 INSERT INTO purchaseorders (po_id, company_id, dibuat_oleh, status_po, metode_pembayaran, total_tagihan, tanggal_dipesan) VALUES
 (1, 1, 1, 'Pending_Approval', 'Tempo_30_Hari', 250301.06, '2026-02-25 06:37:44'),

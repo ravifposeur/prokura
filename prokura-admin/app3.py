@@ -210,6 +210,7 @@ def load_data():
     products = pd.DataFrame(api_get("/api/products?include_empty=true"))
     companies = pd.DataFrame(api_get("/api/companies"))
     users = pd.DataFrame(api_get("/api/users"))
+    movements = pd.DataFrame(api_get("/api/inventory/movements"))
 
     if not orders.empty:
         orders["tanggal_dipesan"] = pd.to_datetime(orders["tanggal_dipesan"])
@@ -226,7 +227,11 @@ def load_data():
         companies["limit_kredit"] = pd.to_numeric(companies["limit_kredit"])
         companies["created_at"] = pd.to_datetime(companies["created_at"])
 
-    return summary, orders, products, companies, users
+    if not movements.empty:
+        movements["quantity"] = pd.to_numeric(movements["quantity"])
+        movements["created_at"] = pd.to_datetime(movements["created_at"])
+
+    return summary, orders, products, companies, users, movements
 
 
 def clear_and_rerun():
@@ -288,7 +293,7 @@ init_portal_state()
 
 
 try:
-    summary, orders, products, companies, users = load_data()
+    summary, orders, products, companies, users, movements = load_data()
 except Exception as exc:
     st.error(f"API tidak bisa diakses: {exc}")
     st.stop()
@@ -393,8 +398,14 @@ if pilihan_menu == "Dashboard Utama":
 
 elif pilihan_menu == "Manajemen Stok Gudang":
     st.title("📦 Manajemen Stok & Aset Gudang")
-    tab_stok1, tab_stok2, tab_stok3 = st.tabs(
-        ["📋 Katalog & Ringkasan", "➕ Tambah Produk Baru", "📝 Ubah / Hapus Produk"]
+    tab_stok1, tab_stok2, tab_stok3, tab_stok4, tab_stok5 = st.tabs(
+        [
+            "📋 Katalog & Ringkasan",
+            "➕ Tambah Produk Baru",
+            "📝 Ubah / Hapus Produk",
+            "📥 Penambahan Stok",
+            "🧾 Riwayat Pergerakan Stok",
+        ]
     )
 
     with tab_stok1:
@@ -571,6 +582,102 @@ elif pilihan_menu == "Manajemen Stok Gudang":
                     clear_and_rerun()
                 except Exception as exc:
                     st.error(f"Gagal: {exc}")
+
+    with tab_stok4:
+        st.subheader("📥 Penambahan Stok Barang")
+        st.caption("Fitur Inventory Service: stok bertambah dan setiap perubahan dicatat ke tabel inventory_movements.")
+        if products.empty:
+            st.info("Katalog produk kosong.")
+        else:
+            options = (products["sku"] + " - " + products["nama_produk"]).tolist()
+            selected_product = st.selectbox("Pilih Produk", options, key="stock_in_product")
+            selected_sku = selected_product.split(" - ")[0]
+            product = products[products["sku"] == selected_sku].iloc[0]
+
+            before_stock = int(product["stok_gudang"])
+            st.metric("Stok Saat Ini", f"{before_stock} {product['satuan']}")
+
+            with st.form("form_stock_in"):
+                qty_stock_in = st.number_input("Jumlah Stok Masuk *", min_value=1, step=1, value=1)
+                note_stock_in = st.text_area(
+                    "Catatan",
+                    value="Restock gudang",
+                    placeholder="Contoh: restock dari supplier, koreksi stok opname",
+                )
+                submitted_stock_in = st.form_submit_button("Tambah Stok", type="primary", use_container_width=True)
+
+            if submitted_stock_in:
+                try:
+                    updated = api_patch(
+                        f"/api/products/{int(product['product_id'])}/stock",
+                        {"quantity": int(qty_stock_in), "note": note_stock_in.strip()},
+                    )
+                    st.success(
+                        f"Stok {updated['nama_produk']} berhasil ditambah. "
+                        f"Stok akhir: {updated['stok_gudang']} {updated['satuan']}."
+                    )
+                    clear_and_rerun()
+                except Exception as exc:
+                    st.error(f"Gagal menambah stok: {exc}")
+
+    with tab_stok5:
+        st.subheader("🧾 Riwayat Pergerakan Stok")
+        st.caption("Audit trail untuk stok awal, stok masuk, stok keluar checkout, dan pengembalian stok.")
+        if movements.empty:
+            st.info("Belum ada riwayat pergerakan stok.")
+        else:
+            f1, f2, f3 = st.columns([2, 2, 3])
+            with f1:
+                movement_type = st.selectbox(
+                    "Tipe",
+                    ["Semua"] + sorted(movements["movement_type"].dropna().unique().tolist()),
+                )
+            with f2:
+                movement_product = st.selectbox(
+                    "Produk",
+                    ["Semua"] + sorted((movements["sku"] + " - " + movements["nama_produk"]).dropna().unique().tolist()),
+                )
+            with f3:
+                movement_search = st.text_input("Cari catatan", placeholder="supplier, checkout, PO, koreksi")
+
+            shown_movements = movements.copy()
+            if movement_type != "Semua":
+                shown_movements = shown_movements[shown_movements["movement_type"] == movement_type]
+            if movement_product != "Semua":
+                selected_movement_sku = movement_product.split(" - ")[0]
+                shown_movements = shown_movements[shown_movements["sku"] == selected_movement_sku]
+            if movement_search:
+                needle = movement_search.lower()
+                shown_movements = shown_movements[
+                    shown_movements["note"].fillna("").str.lower().str.contains(needle)
+                    | shown_movements["movement_type"].str.lower().str.contains(needle)
+                    | shown_movements["sku"].str.lower().str.contains(needle)
+                ]
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Movement", len(shown_movements))
+            m2.metric("Total Stok Masuk", int(shown_movements[shown_movements["quantity"] > 0]["quantity"].sum()))
+            m3.metric("Total Stok Keluar", int(abs(shown_movements[shown_movements["quantity"] < 0]["quantity"].sum())))
+
+            table = shown_movements.copy()
+            table["created_at"] = table["created_at"].dt.strftime("%d %b %Y %H:%M")
+            st.dataframe(
+                table[
+                    [
+                        "movement_id",
+                        "created_at",
+                        "sku",
+                        "nama_produk",
+                        "movement_type",
+                        "quantity",
+                        "note",
+                        "reference_type",
+                        "reference_id",
+                    ]
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
 
 
 elif pilihan_menu == "Manajemen Klien B2B":

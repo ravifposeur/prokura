@@ -1,6 +1,23 @@
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
+const {
+  buildInventoryMovement,
+  parsePositiveInteger,
+} = require("./src/services/inventory/domain");
+const {
+  buildProductSearchFilters,
+  normalizeSku,
+} = require("./src/services/catalog/domain");
+const {
+  normalizeCompanyName,
+  validateEmail,
+} = require("./src/services/customer/domain");
+const {
+  calculateOrderTotal,
+  validateOrderPayload,
+} = require("./src/services/order/domain");
+const { normalizeDateRange } = require("./src/services/reporting/domain");
 
 const app = express();
 app.use(cors());
@@ -19,10 +36,62 @@ function sendError(res, error, message = "Terjadi kesalahan server") {
   res.status(500).json({ success: false, message });
 }
 
+async function ensureSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS inventory_movements (
+      movement_id SERIAL PRIMARY KEY,
+      product_id INT REFERENCES products(product_id),
+      movement_type VARCHAR(30) NOT NULL,
+      quantity INT NOT NULL,
+      note TEXT,
+      reference_type VARCHAR(30),
+      reference_id INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+async function recordInventoryMovement(client, {
+  productId,
+  movementType,
+  quantity,
+  note = null,
+  referenceType = null,
+  referenceId = null,
+}) {
+  const movement = buildInventoryMovement({
+    productId,
+    movementType,
+    quantity,
+    note,
+    referenceType,
+    referenceId,
+  });
+
+  await client.query(
+    `
+      INSERT INTO inventory_movements
+        (product_id, movement_type, quantity, note, reference_type, reference_id)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+    [
+      movement.productId,
+      movement.movementType,
+      movement.quantity,
+      movement.note,
+      movement.referenceType,
+      movement.referenceId,
+    ],
+  );
+}
+
 pool
   .connect()
   .then((client) => {
     client.release();
+    return ensureSchema();
+  })
+  .then(() => {
     console.log("Connected to PostgreSQL");
   })
   .catch((err) => console.error("Database connection failed:", err.stack));
@@ -67,8 +136,15 @@ app.get("/api/companies", async (_req, res) => {
 app.post("/api/companies", async (req, res) => {
   try {
     const { nama_perusahaan, npwp, kategori_industri, limit_kredit } = req.body;
-    if (!nama_perusahaan || !kategori_industri) {
+    if (!kategori_industri) {
       return res.status(400).json({ success: false, message: "Nama perusahaan dan industri wajib diisi" });
+    }
+
+    let companyName;
+    try {
+      companyName = normalizeCompanyName(nama_perusahaan);
+    } catch (error) {
+      return res.status(400).json({ success: false, message: error.message });
     }
 
     const { rows } = await pool.query(
@@ -77,7 +153,7 @@ app.post("/api/companies", async (req, res) => {
         VALUES ($1, $2, $3, $4)
         RETURNING company_id, nama_perusahaan, npwp, kategori_industri, limit_kredit, created_at
       `,
-      [nama_perusahaan, npwp || null, kategori_industri, limit_kredit || 0],
+      [companyName, npwp || null, kategori_industri, limit_kredit || 0],
     );
     res.status(201).json({ success: true, data: rows[0] });
   } catch (error) {
@@ -119,13 +195,20 @@ app.post("/api/users", async (req, res) => {
       return res.status(400).json({ success: false, message: "Data pengguna tidak lengkap" });
     }
 
+    let normalizedEmail;
+    try {
+      normalizedEmail = validateEmail(email);
+    } catch (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
     const { rows } = await pool.query(
       `
         INSERT INTO users (company_id, nama_lengkap, email, peran)
         VALUES ($1, $2, $3, $4)
         RETURNING user_id, company_id, nama_lengkap, email, peran
       `,
-      [company_id, nama_lengkap, email, peran],
+      [company_id, nama_lengkap, normalizedEmail, peran],
     );
     res.status(201).json({ success: true, data: rows[0] });
   } catch (error) {
@@ -135,15 +218,36 @@ app.post("/api/users", async (req, res) => {
 
 app.get("/api/products", async (req, res) => {
   try {
-    const includeEmpty = req.query.include_empty === "true";
-    const { rows } = await pool.query(`
+    const filters = buildProductSearchFilters(req.query);
+    const params = [];
+    const conditions = [];
+
+    if (!filters.includeEmpty) {
+      conditions.push("p.stok_gudang > 0");
+    }
+
+    if (filters.q) {
+      params.push(`%${filters.q}%`);
+      conditions.push(`(p.nama_produk ILIKE $${params.length} OR p.sku ILIKE $${params.length})`);
+    }
+
+    if (filters.category) {
+      params.push(filters.category);
+      conditions.push(`p.kategori = $${params.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const { rows } = await pool.query(
+      `
       SELECT p.product_id, p.sku, p.nama_produk, p.kategori, p.satuan,
              p.harga_dasar, p.stok_gudang, i.image_url
       FROM products p
       LEFT JOIN productimages i ON p.product_id = i.product_id AND i.is_primary = TRUE
-      ${includeEmpty ? "" : "WHERE p.stok_gudang > 0"}
+      ${where}
       ORDER BY p.nama_produk ASC
-    `);
+    `,
+      params,
+    );
     res.json({ success: true, data: rows });
   } catch (error) {
     sendError(res, error, "Gagal mengambil katalog produk");
@@ -151,23 +255,48 @@ app.get("/api/products", async (req, res) => {
 });
 
 app.post("/api/products", async (req, res) => {
+  const client = await pool.connect();
   try {
     const { sku, nama_produk, kategori, satuan, harga_dasar, stok_gudang } = req.body;
-    if (!sku || !nama_produk || !satuan || !harga_dasar) {
+    if (!nama_produk || !satuan || !harga_dasar) {
       return res.status(400).json({ success: false, message: "Data produk tidak lengkap" });
     }
 
-    const { rows } = await pool.query(
+    let normalizedSku;
+    try {
+      normalizedSku = normalizeSku(sku);
+    } catch (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    await client.query("BEGIN");
+    const { rows } = await client.query(
       `
         INSERT INTO products (sku, nama_produk, kategori, satuan, harga_dasar, stok_gudang)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING product_id, sku, nama_produk, kategori, satuan, harga_dasar, stok_gudang
       `,
-      [sku.toUpperCase(), nama_produk, kategori || null, satuan, harga_dasar, stok_gudang || 0],
+      [normalizedSku, nama_produk, kategori || null, satuan, harga_dasar, stok_gudang || 0],
     );
+
+    if (Number(stok_gudang || 0) > 0) {
+      await recordInventoryMovement(client, {
+        productId: rows[0].product_id,
+        movementType: "INITIAL_STOCK",
+        quantity: Number(stok_gudang || 0),
+        note: "Stok awal saat produk dibuat",
+        referenceType: "PRODUCT",
+        referenceId: rows[0].product_id,
+      });
+    }
+
+    await client.query("COMMIT");
     res.status(201).json({ success: true, data: rows[0] });
   } catch (error) {
+    await client.query("ROLLBACK");
     sendError(res, error, "Gagal menambah produk");
+  } finally {
+    client.release();
   }
 });
 
@@ -212,6 +341,88 @@ app.delete("/api/products/:product_id", async (req, res) => {
   }
 });
 
+app.patch("/api/products/:product_id/stock", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { product_id } = req.params;
+    const { quantity, note } = req.body;
+    let amount;
+
+    try {
+      amount = parsePositiveInteger(quantity, "Quantity stok masuk");
+    } catch (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `
+        UPDATE products
+        SET stok_gudang = stok_gudang + $1
+        WHERE product_id = $2
+        RETURNING product_id, sku, nama_produk, kategori, satuan, harga_dasar, stok_gudang
+      `,
+      [amount, product_id],
+    );
+
+    if (rows.length === 0) {
+      throw new Error("Produk tidak ditemukan");
+    }
+
+    await recordInventoryMovement(client, {
+      productId: Number(product_id),
+      movementType: "STOCK_IN",
+      quantity: amount,
+      note: note || "Penambahan stok manual",
+      referenceType: "PRODUCT",
+      referenceId: Number(product_id),
+    });
+
+    await client.query("COMMIT");
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    sendError(res, error, "Gagal menambah stok");
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/inventory/movements", async (req, res) => {
+  try {
+    const conditions = [];
+    const params = [];
+
+    if (req.query.product_id) {
+      params.push(req.query.product_id);
+      conditions.push(`m.product_id = $${params.length}`);
+    }
+
+    if (req.query.movement_type) {
+      params.push(req.query.movement_type);
+      conditions.push(`m.movement_type = $${params.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const { rows } = await pool.query(
+      `
+        SELECT m.movement_id, m.product_id, p.sku, p.nama_produk,
+               m.movement_type, m.quantity, m.note,
+               m.reference_type, m.reference_id, m.created_at
+        FROM inventory_movements m
+        JOIN products p ON m.product_id = p.product_id
+        ${where}
+        ORDER BY m.created_at DESC, m.movement_id DESC
+      `,
+      params,
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    sendError(res, error, "Gagal mengambil riwayat stok");
+  }
+});
+
 app.get("/api/companies/:company_id/credit", async (req, res) => {
   try {
     const { company_id } = req.params;
@@ -238,8 +449,7 @@ app.get("/api/companies/:company_id/credit", async (req, res) => {
 
 app.get("/api/reports/sales", async (req, res) => {
   try {
-    const start = req.query.start || "1900-01-01";
-    const end = req.query.end || "2999-12-31";
+    const { start, end } = normalizeDateRange(req.query);
     const params = [start, end];
 
     const summary = await pool.query(
@@ -407,10 +617,13 @@ app.post("/api/orders", async (req, res) => {
   const { company_id, dibuat_oleh, metode_pembayaran, total_tagihan, items } =
     req.body;
 
-  if (!company_id || !dibuat_oleh || !metode_pembayaran || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ success: false, message: "Payload order tidak lengkap" });
+  try {
+    validateOrderPayload(req.body);
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
   }
 
+  const orderTotal = total_tagihan == null ? calculateOrderTotal(items) : Number(total_tagihan);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -431,7 +644,7 @@ app.post("/api/orders", async (req, res) => {
         VALUES ($1, $2, $3, $4)
         RETURNING po_id
       `,
-      [company_id, dibuat_oleh, metode_pembayaran, total_tagihan],
+      [company_id, dibuat_oleh, metode_pembayaran, orderTotal],
     );
 
     const newPoId = poResult.rows[0].po_id;
@@ -453,6 +666,15 @@ app.post("/api/orders", async (req, res) => {
         `,
         [item.kuantitas, item.product_id],
       );
+
+      await recordInventoryMovement(client, {
+        productId: item.product_id,
+        movementType: "STOCK_OUT",
+        quantity: -Number(item.kuantitas),
+        note: `Checkout PO #${newPoId}`,
+        referenceType: "ORDER",
+        referenceId: newPoId,
+      });
     }
 
     await client.query("COMMIT");
@@ -460,6 +682,7 @@ app.post("/api/orders", async (req, res) => {
       success: true,
       message: "PO berhasil diajukan untuk approval",
       po_id: newPoId,
+      data: { po_id: newPoId },
     });
   } catch (error) {
     await client.query("ROLLBACK");
@@ -513,6 +736,15 @@ app.patch("/api/orders/:po_id/status", async (req, res) => {
           "UPDATE products SET stok_gudang = stok_gudang + $1 WHERE product_id = $2",
           [item.kuantitas, item.product_id],
         );
+
+        await recordInventoryMovement(client, {
+          productId: item.product_id,
+          movementType: "STOCK_RETURN",
+          quantity: Number(item.kuantitas),
+          note: `Pengembalian stok karena PO #${po_id} ditolak`,
+          referenceType: "ORDER",
+          referenceId: Number(po_id),
+        });
       }
     }
 

@@ -378,3 +378,52 @@ Contoh format demo singkat:
 4. Tampilkan SQL query yang dijalankan/diwakili endpoint.
 5. Tampilkan data akhir dengan SQL `SELECT`.
 
+## Status Implementasi End-to-End
+
+Status ini mencatat realisasi fitur di kode Prokura setelah rencana dieksekusi.
+
+| Anggota | Fitur | Endpoint/API | UI | Status |
+| --- | --- | --- | --- | --- |
+| Ravif | Penambahan barang baru | `POST /api/products` | Admin `Manajemen Stok Gudang -> Tambah Produk Baru` | Selesai |
+| Ravif | Pencarian dan filter barang | `GET /api/products?q=...&category=...` | Admin dan customer web katalog produk | Selesai |
+| Aloysius | Penambahan stok barang | `PATCH /api/products/:product_id/stock` | Admin `Manajemen Stok Gudang -> Penambahan Stok` | Selesai |
+| Aloysius | Riwayat pergerakan stok | `GET /api/inventory/movements` | Admin `Manajemen Stok Gudang -> Riwayat Pergerakan Stok` | Selesai |
+| Indratanaya | Pembelian barang oleh customer | `POST /api/orders` | Portal Pembelian dan customer web checkout | Selesai |
+| Indratanaya | Riwayat pembelian customer | `GET /api/companies/:company_id/orders`, `GET /api/orders/:po_id` | Portal Pembelian `Riwayat Pesanan Saya` | Selesai |
+| Gilbert | Manajemen customer/perusahaan | `POST /api/companies`, `GET /api/companies` | Admin `Manajemen Klien B2B -> Tambah Klien Baru` | Selesai |
+| Gilbert | Manajemen user perusahaan | `POST /api/users`, `GET /api/users` | Admin `Manajemen Klien B2B -> Manajemen Pengguna` | Selesai |
+| Pison | Rekapitulasi penjualan | `GET /api/reports/sales` | Admin `Laporan & Analitik` | Selesai |
+| Pison | Analitik top produk dan top customer | `GET /api/reports/sales` bagian `top_products` dan `top_clients` | Grafik laporan admin | Selesai |
+
+## Bukti Smoke Test
+
+Smoke test otomatis tersedia di:
+
+```powershell
+.\scripts\final_project_smoke.ps1
+```
+
+Smoke test tersebut menjalankan semua fitur utama:
+
+1. Membuat produk baru.
+2. Mencari produk baru melalui API katalog.
+3. Menambah stok produk.
+4. Mengecek riwayat pergerakan stok.
+5. Membuat perusahaan customer.
+6. Membuat user perusahaan.
+7. Membuat purchase order.
+8. Mengecek riwayat pembelian customer.
+9. Mengecek rekap penjualan dan top analytics.
+10. Mengecek kondisi akhir produk dan movement stok.
+
+Hasil smoke test terakhir:
+
+```text
+Catalog Service: product created, search result count 1
+Inventory Service: stock increased to 15, movement count 2 before checkout
+Customer Service: company and user created
+Order Service: PO created, customer order history count 1
+Reporting Service: report summary returned, top products and top clients returned
+Final stock state: 13 after checkout quantity 2
+Final movements: INITIAL_STOCK, STOCK_IN, STOCK_OUT
+```
