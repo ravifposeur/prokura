@@ -62,9 +62,9 @@ prokura-api/
         repository.js
         domain.js
         README.md
-    tests/
-      unit/
-      integration/
+  tests/
+    unit/
+    integration/
 ```
 
 Catatan:
@@ -109,9 +109,10 @@ Checklist:
 - [x] Integration test membuat company dan user.
 - [x] Integration test membuat order dan mengecek riwayat customer.
 - [x] Integration test mengecek reporting sales.
-- [ ] Integration test approval/reject order dan return stock.
-- [ ] Integration test delete product yang sudah dipakai PO harus gagal.
-- [ ] Integration test admin summary setelah transaksi.
+- [x] Integration test reject order dan return stock.
+- [x] Integration test delete product yang sudah dipakai PO harus gagal.
+- [x] Integration test admin summary setelah transaksi.
+- [x] Integration test approval order non-reject tanpa return stock.
 
 ## Rencana UI/UX Validation
 
@@ -143,12 +144,12 @@ Tahap 1 - Fondasi:
 
 Tahap 2 - Modularisasi API:
 
-- [ ] Pindahkan route Catalog ke `src/services/catalog/routes.js`.
-- [ ] Pindahkan route Inventory ke `src/services/inventory/routes.js`.
-- [ ] Pindahkan route Customer ke `src/services/customer/routes.js`.
-- [ ] Pindahkan route Order ke `src/services/order/routes.js`.
-- [ ] Pindahkan route Reporting ke `src/services/reporting/routes.js`.
-- [ ] `server.js` hanya memasang middleware dan register routes.
+- [x] Pindahkan route Catalog ke `src/services/catalog/routes.js`.
+- [x] Pindahkan route Inventory ke `src/services/inventory/routes.js`.
+- [x] Pindahkan route Customer ke `src/services/customer/routes.js`.
+- [x] Pindahkan route Order ke `src/services/order/routes.js`.
+- [x] Pindahkan route Reporting ke `src/services/reporting/routes.js`.
+- [x] `server.js` hanya memasang middleware dan register routes.
 
 Tahap 3 - Deployability:
 
@@ -198,8 +199,23 @@ Smoke test final project:
 - [x] `npm run test:integration` lolos dengan 1 test end-to-end API + PostgreSQL.
 - [x] `npm test` lolos dengan total 16 test.
 - [x] `scripts/final_project_smoke.ps1` lolos untuk Catalog, Inventory, Customer, Order, Reporting, dan final database state.
+- [x] Integration test ditambah untuk reject order, return stock, proteksi hapus produk yang sudah dipakai PO, dan admin summary.
+- [x] Route Catalog, Inventory, Customer, Order, dan Reporting dipindahkan dari `server.js` ke `src/services/*/routes.js`.
+- [x] Helper database dipindahkan ke `src/shared/db.js`.
+- [x] Helper response error dipindahkan ke `src/shared/http.js`.
+- [x] Repository inventory movement dipindahkan ke `src/services/inventory/repository.js`.
+- [x] API modular direstart dan `/api/health` lolos.
+- [x] `npm run test:integration` lolos dengan 2 test end-to-end API + PostgreSQL.
+- [x] `npm test` lolos dengan total 17 test.
+- [x] Smoke test final project dijalankan ulang setelah modularisasi route dan tetap lolos.
+- [x] Customer web `http://127.0.0.1:3000` merespons.
+- [x] Admin Streamlit `http://127.0.0.1:8501/_stcore/health` merespons `ok`.
+- [x] Integration test approval order tanpa return stock ditambahkan.
+- [x] `npm run test:integration` lolos dengan 3 test end-to-end API + PostgreSQL.
+- [x] `npm test` lolos dengan total 18 test.
 
 Catatan sisa:
 
-- Route dan repository belum dipisah penuh dari `server.js`; sistem sudah memiliki service domain boundary, tetapi belum microservice deployable 1 proses/container per service.
-- Integration test tambahan untuk reject order/return stock, proteksi delete product, dan admin summary masih perlu dikerjakan pada tahap berikutnya.
+- Sistem sudah memiliki route/domain/repository boundary per service, tetapi belum microservice deployable 1 proses/container per service.
+- Repository SQL belum dipisah penuh untuk Catalog, Customer, Order, dan Reporting; sebagian query masih berada di `routes.js`.
+- Browser screenshot berbasis automation belum selesai karena validasi saat ini masih memakai HTTP health/build/smoke.
