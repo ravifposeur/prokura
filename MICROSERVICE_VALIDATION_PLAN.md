@@ -177,7 +177,7 @@ Tahap 3 - Deployability:
 - [x] Pisahkan process service untuk Catalog, Inventory, Customer, Order, dan Reporting.
 - [x] Tambah health endpoint per service.
 - [x] Tambah dokumentasi port internal setiap service.
-- [ ] Jalankan full `docker compose -f docker-compose.microservices.yml up --build` setelah memastikan port `5000` tidak sedang dipakai API lokal.
+- [x] Jalankan full `docker compose -f docker-compose.microservices.yml up --build -d` setelah memastikan port `5000` tidak sedang dipakai API lokal.
 
 ## Cara Menjalankan Test
 
@@ -258,10 +258,27 @@ Smoke test final project:
   - Customer `GET /api/companies`.
   - Order `GET /api/orders`.
   - Reporting `GET /api/admin/summary`.
+- [x] Proses lokal di port `5000`, `5101`, `5102`, `5103`, `5104`, dan `5105` dihentikan agar tidak bentrok dengan Docker Compose.
+- [x] Full stack Docker microservices berhasil dijalankan dengan `docker compose -f docker-compose.microservices.yml up --build -d`.
+- [x] Container aktif:
+  - `prokura-api-gateway` di `5000`.
+  - `prokura-catalog-service` di `5101`.
+  - `prokura-inventory-service` di `5102`.
+  - `prokura-customer-service` di `5103`.
+  - `prokura-order-service` di `5104`.
+  - `prokura-reporting-service` di `5105`.
+  - `prokura-postgres-ms` di `5440`.
+- [x] Health check API gateway dan kelima service container lolos.
+- [x] `npm test` terhadap API gateway container lolos dengan total 18 test sebelum repository unit test ditambah.
+- [x] Smoke test final project terhadap API gateway container lolos.
+- [x] Customer web `3000` dan Admin Streamlit `8501` tetap merespons setelah backend pindah ke container gateway.
+- [x] Unit test repository dengan mock database ditambahkan untuk Catalog, Customer, Order, dan Reporting.
+- [x] `npm run test:unit` lolos dengan total 23 test.
+- [x] `npm test` lolos dengan total 26 test.
 
 Catatan sisa:
 
 - Sistem sudah memiliki route/domain/repository boundary per service dan dapat dijalankan sebagai 1 proses per service secara lokal.
-- Compose microservices sudah tervalidasi secara konfigurasi, tetapi belum dijalankan penuh karena port `5000` sedang dipakai API lokal untuk UI.
-- Repository SQL utama sudah dipisah untuk semua service inti, tetapi belum ada unit test khusus repository dengan mock database.
+- Compose microservices sudah tervalidasi penuh sampai build, container start, health check, integration test, dan smoke test.
+- Ada 1 moderate vulnerability dari `npm ci --omit=dev` saat Docker build; perlu ditinjau dengan `npm audit` sebelum final release.
 - Browser screenshot berbasis automation belum selesai karena validasi saat ini masih memakai HTTP health/build/smoke.
