@@ -1,7 +1,12 @@
 const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
 const test = require("node:test");
 
 const API_BASE_URL = process.env.PROKURA_API_BASE_URL || "http://127.0.0.1:5000";
+
+function uniqueStamp(label) {
+  return `${Date.now()}-${label}-${randomUUID().slice(0, 8)}`;
+}
 
 async function api(method, path, body) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -54,7 +59,7 @@ async function createProductCompanyUser(stamp, stock = 8) {
 }
 
 test("final project API flow works across services", async () => {
-  const stamp = `${Date.now()}-main`;
+  const stamp = uniqueStamp("main");
   const { company, product, user } = await createProductCompanyUser(stamp);
   assert.equal(product.stok_gudang, 8);
 
@@ -97,7 +102,7 @@ test("final project API flow works across services", async () => {
 });
 
 test("order rejection returns stock and used products cannot be deleted", async () => {
-  const stamp = `${Date.now()}-reject`;
+  const stamp = uniqueStamp("reject");
   const beforeSummary = await api("GET", "/api/admin/summary");
   const { company, product, user } = await createProductCompanyUser(stamp, 5);
 
@@ -138,7 +143,7 @@ test("order rejection returns stock and used products cannot be deleted", async 
 });
 
 test("order approval keeps stock deducted without stock return movement", async () => {
-  const stamp = `${Date.now()}-approve`;
+  const stamp = uniqueStamp("approve");
   const { company, product, user } = await createProductCompanyUser(stamp, 5);
 
   const order = await api("POST", "/api/orders", {

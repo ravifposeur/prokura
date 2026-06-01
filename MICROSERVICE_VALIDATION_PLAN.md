@@ -31,8 +31,10 @@ Target bertahap:
 
 ```text
 prokura-api/
+  Dockerfile
   server.js
   src/
+    service-host.js
     shared/
       db.js
       http.js
@@ -70,9 +72,25 @@ prokura-api/
 Catatan:
 
 - `server.js` boleh menjadi API gateway/host Express.
+- `src/service-host.js` dapat menjalankan satu service saja berdasarkan `SERVICE_NAME`.
 - Setiap folder service harus punya tanggung jawab jelas.
 - Integrasi antar UI dan backend tetap melalui HTTP API.
 - Akses database tetap melalui repository/service layer, bukan dari UI.
+
+## Port Microservice Lokal
+
+Port aktif untuk validasi lokal:
+
+| Komponen | Port | Endpoint Health |
+| --- | --- | --- |
+| API Gateway | `5000` | `http://127.0.0.1:5000/api/health` |
+| Catalog Service | `5101` | `http://127.0.0.1:5101/health` |
+| Inventory Service | `5102` | `http://127.0.0.1:5102/health` |
+| Customer Service | `5103` | `http://127.0.0.1:5103/health` |
+| Order Service | `5104` | `http://127.0.0.1:5104/health` |
+| Reporting Service | `5105` | `http://127.0.0.1:5105/health` |
+| Customer Web | `3000` | `http://127.0.0.1:3000` |
+| Admin Web | `8501` | `http://127.0.0.1:8501/_stcore/health` |
 
 ## Daftar Service dan Kontrak
 
@@ -153,10 +171,13 @@ Tahap 2 - Modularisasi API:
 
 Tahap 3 - Deployability:
 
-- [ ] Tambah `docker-compose.microservices.yml`.
-- [ ] Pisahkan process service bila waktu cukup.
-- [ ] Tambah health endpoint per service.
-- [ ] Tambah dokumentasi port internal setiap service.
+- [x] Tambah `docker-compose.microservices.yml`.
+- [x] Tambah `prokura-api/Dockerfile`.
+- [x] Tambah `src/service-host.js` untuk menjalankan satu service per proses.
+- [x] Pisahkan process service untuk Catalog, Inventory, Customer, Order, dan Reporting.
+- [x] Tambah health endpoint per service.
+- [x] Tambah dokumentasi port internal setiap service.
+- [ ] Jalankan full `docker compose -f docker-compose.microservices.yml up --build` setelah memastikan port `5000` tidak sedang dipakai API lokal.
 
 ## Cara Menjalankan Test
 
@@ -213,9 +234,34 @@ Smoke test final project:
 - [x] Integration test approval order tanpa return stock ditambahkan.
 - [x] `npm run test:integration` lolos dengan 3 test end-to-end API + PostgreSQL.
 - [x] `npm test` lolos dengan total 18 test.
+- [x] Repository SQL Catalog dipindahkan ke `src/services/catalog/repository.js`.
+- [x] Repository SQL Customer dipindahkan ke `src/services/customer/repository.js`.
+- [x] Repository SQL Order dipindahkan ke `src/services/order/repository.js`.
+- [x] Repository SQL Reporting dipindahkan ke `src/services/reporting/repository.js`.
+- [x] API direstart setelah pemisahan repository dan `/api/health` tetap lolos.
+- [x] Integration test diperkuat dengan suffix random agar tidak bentrok saat test dijalankan berdekatan.
+- [x] `npm test` lolos ulang dengan total 18 test setelah pemisahan repository.
+- [x] Smoke test final project lolos ulang setelah pemisahan repository.
+- [x] `src/service-host.js` dibuat untuk menjalankan service tunggal via `npm run service:*`.
+- [x] `docker-compose.microservices.yml` dibuat untuk API Gateway + 5 backend service + PostgreSQL.
+- [x] `docker compose -f docker-compose.microservices.yml config` lolos validasi konfigurasi.
+- [x] Kelima service backend lokal dinyalakan sebagai proses terpisah:
+  - Catalog `5101`, PID `33088`.
+  - Inventory `5102`, PID `34464`.
+  - Customer `5103`, PID `40776`.
+  - Order `5104`, PID `32392`.
+  - Reporting `5105`, PID `33720`.
+- [x] Health check kelima service lokal lolos dengan database `ok`.
+- [x] Endpoint representatif tiap service lokal lolos:
+  - Catalog `GET /api/products`.
+  - Inventory `GET /api/inventory/movements`.
+  - Customer `GET /api/companies`.
+  - Order `GET /api/orders`.
+  - Reporting `GET /api/admin/summary`.
 
 Catatan sisa:
 
-- Sistem sudah memiliki route/domain/repository boundary per service, tetapi belum microservice deployable 1 proses/container per service.
-- Repository SQL belum dipisah penuh untuk Catalog, Customer, Order, dan Reporting; sebagian query masih berada di `routes.js`.
+- Sistem sudah memiliki route/domain/repository boundary per service dan dapat dijalankan sebagai 1 proses per service secara lokal.
+- Compose microservices sudah tervalidasi secara konfigurasi, tetapi belum dijalankan penuh karena port `5000` sedang dipakai API lokal untuk UI.
+- Repository SQL utama sudah dipisah untuk semua service inti, tetapi belum ada unit test khusus repository dengan mock database.
 - Browser screenshot berbasis automation belum selesai karena validasi saat ini masih memakai HTTP health/build/smoke.

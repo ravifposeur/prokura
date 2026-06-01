@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
+    "service:catalog": "node src/service-host.js catalog",
+    "service:customer": "node src/service-host.js customer",
+    "service:inventory": "node src/service-host.js inventory",
+    "service:order": "node src/service-host.js order",
+    "service:reporting": "node src/service-host.js reporting",
     "test": "node --test",
     "test:unit": "node --test tests/unit/*.test.js",
     "test:integration": "node --test tests/integration/*.test.js"

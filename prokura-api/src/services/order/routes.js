@@ -1,18 +1,23 @@
 const { calculateOrderTotal, validateOrderPayload } = require("./domain");
+const {
+  createOrderDetail,
+  createPurchaseOrder,
+  decrementProductStock,
+  getOrderStatusForUpdate,
+  incrementProductStock,
+  listCompanyOrders,
+  listOrderDetails,
+  listOrders,
+  listOrderStockItems,
+  lockProductStock,
+  updateOrderStatus,
+} = require("./repository");
 
 function registerOrderRoutes(app, { pool, sendError, recordInventoryMovement }) {
   app.get("/api/orders", async (_req, res) => {
     try {
-      const { rows } = await pool.query(`
-        SELECT po.po_id, po.status_po, po.metode_pembayaran, po.total_tagihan,
-               po.tanggal_dipesan, c.nama_perusahaan AS company,
-               u.nama_lengkap AS pembuat
-        FROM purchaseorders po
-        JOIN companies c ON po.company_id = c.company_id
-        JOIN users u ON po.dibuat_oleh = u.user_id
-        ORDER BY po.tanggal_dipesan DESC
-      `);
-      res.json({ success: true, data: rows });
+      const orders = await listOrders(pool);
+      res.json({ success: true, data: orders });
     } catch (error) {
       sendError(res, error, "Gagal mengambil daftar PO");
     }
@@ -21,18 +26,8 @@ function registerOrderRoutes(app, { pool, sendError, recordInventoryMovement }) 
   app.get("/api/companies/:company_id/orders", async (req, res) => {
     try {
       const { company_id } = req.params;
-      const { rows } = await pool.query(
-        `
-          SELECT po.po_id, po.status_po, po.metode_pembayaran, po.total_tagihan,
-                 po.tanggal_dipesan, u.nama_lengkap AS pembuat
-          FROM purchaseorders po
-          JOIN users u ON po.dibuat_oleh = u.user_id
-          WHERE po.company_id = $1
-          ORDER BY po.tanggal_dipesan DESC
-        `,
-        [company_id],
-      );
-      res.json({ success: true, data: rows });
+      const orders = await listCompanyOrders(pool, company_id);
+      res.json({ success: true, data: orders });
     } catch (error) {
       sendError(res, error, "Gagal mengambil riwayat PO");
     }
@@ -41,18 +36,8 @@ function registerOrderRoutes(app, { pool, sendError, recordInventoryMovement }) 
   app.get("/api/orders/:po_id", async (req, res) => {
     try {
       const { po_id } = req.params;
-      const { rows } = await pool.query(
-        `
-          SELECT p.sku, p.nama_produk, p.satuan, od.kuantitas, od.harga_final,
-                 (od.kuantitas * od.harga_final) AS subtotal
-          FROM orderdetails od
-          JOIN products p ON od.product_id = p.product_id
-          WHERE od.po_id = $1
-          ORDER BY od.detail_id ASC
-        `,
-        [po_id],
-      );
-      res.json({ success: true, data: rows });
+      const details = await listOrderDetails(pool, po_id);
+      res.json({ success: true, data: details });
     } catch (error) {
       sendError(res, error, "Gagal mengambil detail PO");
     }
@@ -74,43 +59,22 @@ function registerOrderRoutes(app, { pool, sendError, recordInventoryMovement }) 
       await client.query("BEGIN");
 
       for (const item of items) {
-        const stock = await client.query(
-          "SELECT stok_gudang FROM products WHERE product_id = $1 FOR UPDATE",
-          [item.product_id],
-        );
-        if (stock.rows.length === 0 || Number(stock.rows[0].stok_gudang) < Number(item.kuantitas)) {
+        const stock = await lockProductStock(client, item.product_id);
+        if (!stock || Number(stock.stok_gudang) < Number(item.kuantitas)) {
           throw new Error(`Stok produk ${item.product_id} tidak cukup`);
         }
       }
 
-      const poResult = await client.query(
-        `
-          INSERT INTO purchaseorders (company_id, dibuat_oleh, metode_pembayaran, total_tagihan)
-          VALUES ($1, $2, $3, $4)
-          RETURNING po_id
-        `,
-        [company_id, dibuat_oleh, metode_pembayaran, orderTotal],
-      );
-
-      const newPoId = poResult.rows[0].po_id;
+      const newPoId = await createPurchaseOrder(client, {
+        company_id,
+        dibuat_oleh,
+        metode_pembayaran,
+        total_tagihan: orderTotal,
+      });
 
       for (const item of items) {
-        await client.query(
-          `
-            INSERT INTO orderdetails (po_id, product_id, kuantitas, harga_final)
-            VALUES ($1, $2, $3, $4)
-          `,
-          [newPoId, item.product_id, item.kuantitas, item.harga_final],
-        );
-
-        await client.query(
-          `
-            UPDATE products
-            SET stok_gudang = stok_gudang - $1
-            WHERE product_id = $2
-          `,
-          [item.kuantitas, item.product_id],
-        );
+        await createOrderDetail(client, newPoId, item);
+        await decrementProductStock(client, item);
 
         await recordInventoryMovement(client, {
           productId: item.product_id,
@@ -150,37 +114,20 @@ function registerOrderRoutes(app, { pool, sendError, recordInventoryMovement }) 
     try {
       await client.query("BEGIN");
 
-      const current = await client.query(
-        "SELECT status_po FROM purchaseorders WHERE po_id = $1 FOR UPDATE",
-        [po_id],
-      );
+      const current = await getOrderStatusForUpdate(client, po_id);
 
-      if (current.rows.length === 0) {
+      if (!current) {
         throw new Error("PO tidak ditemukan");
       }
 
-      const oldStatus = current.rows[0].status_po;
-      const result = await client.query(
-        `
-          UPDATE purchaseorders
-          SET status_po = $1
-          WHERE po_id = $2
-          RETURNING po_id, status_po
-        `,
-        [status_po, po_id],
-      );
+      const oldStatus = current.status_po;
+      const result = await updateOrderStatus(client, po_id, status_po);
 
       if (status_po === "Rejected" && oldStatus !== "Rejected") {
-        const { rows: items } = await client.query(
-          "SELECT product_id, kuantitas FROM orderdetails WHERE po_id = $1",
-          [po_id],
-        );
+        const items = await listOrderStockItems(client, po_id);
 
         for (const item of items) {
-          await client.query(
-            "UPDATE products SET stok_gudang = stok_gudang + $1 WHERE product_id = $2",
-            [item.kuantitas, item.product_id],
-          );
+          await incrementProductStock(client, item);
 
           await recordInventoryMovement(client, {
             productId: item.product_id,
@@ -193,8 +140,8 @@ function registerOrderRoutes(app, { pool, sendError, recordInventoryMovement }) 
         }
       }
 
-      await client.query("COMMIT");
-      res.json({ success: true, data: result.rows[0] });
+    await client.query("COMMIT");
+    res.json({ success: true, data: result });
     } catch (error) {
       await client.query("ROLLBACK");
       sendError(res, error, "Gagal memproses status PO");
