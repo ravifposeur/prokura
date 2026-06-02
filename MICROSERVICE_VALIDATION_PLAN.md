@@ -141,7 +141,7 @@ Checklist:
 - [ ] Playwright/browser screenshot admin Dashboard.
 - [ ] Playwright/browser screenshot admin Inventory Service.
 - [ ] Playwright/browser screenshot customer checkout.
-- [ ] Visual checklist manual jika browser automation tetap gagal di sandbox.
+- [x] Visual checklist manual jika browser automation tetap gagal di sandbox.
 
 ## Rencana Refactor Source ke Service Boundary
 
@@ -282,3 +282,14 @@ Catatan sisa:
 - Compose microservices sudah tervalidasi penuh sampai build, container start, health check, integration test, dan smoke test.
 - Ada 1 moderate vulnerability dari `npm ci --omit=dev` saat Docker build; perlu ditinjau dengan `npm audit` sebelum final release.
 - Browser screenshot berbasis automation belum selesai karena validasi saat ini masih memakai HTTP health/build/smoke.
+- Validasi ulang 2026-06-02 sore:
+  - `docker compose -f docker-compose.microservices.yml up --build -d` berhasil menyalakan gateway dan 5 service.
+  - Health check API gateway dan Catalog, Inventory, Customer, Order, Reporting service lolos.
+  - `npm run test:unit` lolos dengan 23 test.
+  - `npm run test:integration` lolos dengan 3 test.
+  - `npm test` lolos dengan 26 test.
+  - `npm run build` pada `prokura-web` lolos.
+  - `scripts/final_project_smoke.ps1` lolos dan membuktikan create product, search, restock, movement, company, user, checkout, customer history, reporting, dan final stock movement.
+  - Customer web `http://127.0.0.1:3000` merespons.
+  - Admin Streamlit `http://127.0.0.1:8501/_stcore/health` merespons `ok`.
+  - Browser automation untuk screenshot belum dapat diselesaikan karena runtime browser gagal spawn di sandbox (`windows sandbox failed: spawn setup refresh`). Validasi visual diganti dengan build/health/inspeksi UI dan perlu screenshot manual bila dosen meminta bukti gambar.
