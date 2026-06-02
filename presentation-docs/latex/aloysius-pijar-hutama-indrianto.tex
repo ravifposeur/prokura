@@ -5,15 +5,40 @@
 \usepackage{hyperref}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\definecolor{codebg}{RGB}{248,250,252}
+\definecolor{codeblue}{RGB}{37,99,235}
+\definecolor{codegreen}{RGB}{22,101,52}
+\definecolor{codered}{RGB}{185,28,28}
+\definecolor{codegray}{RGB}{100,116,139}
 \lstdefinelanguage{JavaScript}{morekeywords={const,let,var,async,await,function,try,catch,return,if,else,for,of,require,module,exports},sensitive=true,morecomment=[l]{//},morestring=[b]",morestring=[b]`}
-\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible}
-
-\title{Aloysius Pijar Hutama Indrianto}
-\author{24/534591/PA/22675}
-\date{}
+\lstdefinestyle{prokuraCode}{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible,keepspaces=true,showspaces=false,showstringspaces=false,showtabs=false,tabsize=2,numbers=left,numberstyle=\tiny\color{codegray},keywordstyle=\color{codeblue}\bfseries,stringstyle=\color{codered},commentstyle=\color{codegreen},rulecolor=\color{codegray},backgroundcolor=\color{codebg}}
+\lstset{style=prokuraCode}
+\newcommand{\docheader}[2]{
+\begin{titlepage}
+\centering
+{\Large\bfseries Prokura HoReCa Supply\par}
+\vspace{0.4cm}
+{\large Dokumentasi Fitur Microservice Final Project\par}
+\vspace{0.8cm}
+{\large Mata Kuliah: Proyek 2 - Final Project\par}
+\vspace{1.2cm}
+{\large\bfseries #1\par}
+{\large NIM: #2\par}
+\vfill
+\begin{tabular}{rl}
+Program Studi: & Ilmu Komputer\\
+Departemen: & Departemen Ilmu Komputer dan Elektronika (DIKE)\\
+Fakultas: & FMIPA\\
+Universitas: & Universitas Gadjah Mada\\
+\end{tabular}
+\vfill
+\end{titlepage}
+}
 
 \begin{document}
-\maketitle
+\docheader{Aloysius Pijar Hutama Indrianto}{24/534591/PA/22675}
 
 \section*{Peran}
 Owner Inventory Service. Aloysius bertanggung jawab pada perubahan stok gudang dan audit trail pergerakan stok.
@@ -38,6 +63,17 @@ Penjelasan: entry \texttt{inventory: registerInventoryRoutes} menunjukkan route 
 \item Penambahan stok barang.
 \item Riwayat pergerakan stok.
 \end{enumerate}
+
+\section*{Diagram Tabel yang Ditangani}
+\begin{center}
+\begin{tikzpicture}[entity/.style={draw, rounded corners, fill=blue!5, align=left, font=\small, minimum width=4.3cm}, rel/.style={-Latex, thick}]
+\node[entity] (products) {\textbf{products}\\\texttt{product\_id} PK\\\texttt{sku}\\\texttt{nama\_produk}\\\texttt{stok\_gudang}};
+\node[entity, right=1.4cm of products] (movements) {\textbf{inventory\_movements}\\\texttt{movement\_id} PK\\\texttt{product\_id} FK\\\texttt{movement\_type}\\\texttt{quantity}\\\texttt{note}};
+\draw[rel] (products) -- node[above]{1..n} (movements);
+\end{tikzpicture}
+\end{center}
+
+Penjelasan: Inventory Service mengubah \texttt{products.stok\_gudang} dan mencatat setiap perubahan ke \texttt{inventory\_movements}. Relasi \texttt{product\_id} menjaga setiap movement selalu terhubung ke produk yang valid.
 
 \section*{Lokasi Kode Program dan Penjelasan}
 \subsection*{Route penambahan stok}

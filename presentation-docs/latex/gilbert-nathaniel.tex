@@ -5,15 +5,40 @@
 \usepackage{hyperref}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\definecolor{codebg}{RGB}{248,250,252}
+\definecolor{codeblue}{RGB}{37,99,235}
+\definecolor{codegreen}{RGB}{22,101,52}
+\definecolor{codered}{RGB}{185,28,28}
+\definecolor{codegray}{RGB}{100,116,139}
 \lstdefinelanguage{JavaScript}{morekeywords={const,let,var,async,await,function,try,catch,return,if,else,for,of,require,module,exports},sensitive=true,morecomment=[l]{//},morestring=[b]",morestring=[b]`}
-\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible}
-
-\title{Gilbert Nathaniel}
-\author{24/533877/PA/22623}
-\date{}
+\lstdefinestyle{prokuraCode}{basicstyle=\ttfamily\small,breaklines=true,frame=single,columns=fullflexible,keepspaces=true,showspaces=false,showstringspaces=false,showtabs=false,tabsize=2,numbers=left,numberstyle=\tiny\color{codegray},keywordstyle=\color{codeblue}\bfseries,stringstyle=\color{codered},commentstyle=\color{codegreen},rulecolor=\color{codegray},backgroundcolor=\color{codebg}}
+\lstset{style=prokuraCode}
+\newcommand{\docheader}[2]{
+\begin{titlepage}
+\centering
+{\Large\bfseries Prokura HoReCa Supply\par}
+\vspace{0.4cm}
+{\large Dokumentasi Fitur Microservice Final Project\par}
+\vspace{0.8cm}
+{\large Mata Kuliah: Proyek 2 - Final Project\par}
+\vspace{1.2cm}
+{\large\bfseries #1\par}
+{\large NIM: #2\par}
+\vfill
+\begin{tabular}{rl}
+Program Studi: & Ilmu Komputer\\
+Departemen: & Departemen Ilmu Komputer dan Elektronika (DIKE)\\
+Fakultas: & FMIPA\\
+Universitas: & Universitas Gadjah Mada\\
+\end{tabular}
+\vfill
+\end{titlepage}
+}
 
 \begin{document}
-\maketitle
+\docheader{Gilbert Nathaniel}{24/533877/PA/22623}
 
 \section*{Peran}
 Owner Customer Service. Gilbert bertanggung jawab pada data perusahaan B2B, limit kredit, dan user perusahaan.
@@ -38,6 +63,17 @@ Penjelasan: entry \texttt{customer: registerCustomerRoutes} membuktikan Customer
 \item Manajemen customer/perusahaan.
 \item Manajemen user perusahaan.
 \end{enumerate}
+
+\section*{Diagram Tabel yang Ditangani}
+\begin{center}
+\begin{tikzpicture}[entity/.style={draw, rounded corners, fill=blue!5, align=left, font=\small, minimum width=4.2cm}, rel/.style={-Latex, thick}]
+\node[entity] (companies) {\textbf{companies}\\\texttt{company\_id} PK\\\texttt{nama\_perusahaan}\\\texttt{npwp}\\\texttt{kategori\_industri}\\\texttt{limit\_kredit}};
+\node[entity, right=1.4cm of companies] (users) {\textbf{users}\\\texttt{user\_id} PK\\\texttt{company\_id} FK\\\texttt{nama\_lengkap}\\\texttt{email}\\\texttt{peran}};
+\draw[rel] (companies) -- node[above]{1..n} (users);
+\end{tikzpicture}
+\end{center}
+
+Penjelasan: Customer Service mengelola master data perusahaan pada tabel \texttt{companies} dan user perusahaan pada tabel \texttt{users}. Satu perusahaan dapat memiliki banyak user.
 
 \section*{Lokasi Kode Program dan Penjelasan}
 \subsection*{Route perusahaan}
